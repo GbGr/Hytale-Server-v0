@@ -1,0 +1,85 @@
+# =========================
+# Hytale runtime (NOT in git)
+# =========================
+/runtime/*
+!/runtime/.keep
+
+# If you use the Hytale Downloader, it may create credentials in the repo root
+.hytale-downloader-credentials.json
+
+# Sometimes tools create local working dirs
+/.tools/
+/tmp/
+
+# =========================
+# Logs / cache
+# =========================
+*.log
+logs/
+**/logs/
+cache/
+**/cache/
+
+# =========================
+# OS / Editor
+# =========================
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# JetBrains IDEs
+.idea/
+*.iml
+out/
+.idea_modules/
+
+# VS Code
+.vscode/
+.history/
+
+# =========================
+# Java / Gradle / Maven (if you add plugins)
+# =========================
+# Compiled output
+*.class
+*.jar
+*.war
+*.ear
+
+# Keep build artifacts out of git (plugin jars should be produced by CI/build)
+build/
+**/build/
+target/
+**/target/
+
+# Gradle
+.gradle/
+gradle-app.setting
+!gradle/wrapper/gradle-wrapper.jar
+
+# Maven
+.mvn/wrapper/maven-wrapper.jar
+.mvn/timing.properties
+
+# =========================
+# Node (if you add tooling scripts later)
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Environment files (keep templates instead)
+# =========================
+.env
+.env.*.local
+
+# If you keep secrets in env files, do NOT commit them
+# (If your infra/env.dev and infra/env.prod are safe, remove these ignores)
+# infra/env.dev
+# infra/env.prod
