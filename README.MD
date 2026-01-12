@@ -1,59 +1,53 @@
 ````md
-# My Hytale Server (dev + prod) — one repo setup
+# Hytale Server Monorepo (Dev on localhost + Prod on Ubuntu) — Docker Compose
 
-This repository contains everything needed to run a **Hytale Dedicated Server** for:
-- local development (macOS) on `localhost`
-- production deployment (Ubuntu) via **Docker Compose**
+This repo is designed so you can:
+- run a **local dev server** on **macOS / Windows / Linux** with the same commands
+- deploy the same setup to an **Ubuntu** host for production
+- keep **your code + infra** in git, while keeping **Hytale runtime binaries/assets/world data** out of git
 
-It keeps **runtime binaries / assets / world data out of git** and stores only infrastructure + your code.
-
-> Notes:
-> - Hytale server runs **QUIC over UDP** (default port `5520/udp`), not TCP.
-> - The server is a Java app and requires **Java 25** inside the container.
-> - On first start (authenticated mode), you must run `/auth login device` in the server console.
+> Networking note: Hytale Server uses **QUIC over UDP** (default `5520/udp`), not TCP.
 
 ---
 
-## Repo layout
+## Repository layout
 
 ```text
 my-hytale/
-  runtime/                 # NOT COMMITTED: Server binaries, Assets.zip, worlds, logs
+  README.md
+  runtime/                 # NOT COMMITTED: Server/, Assets.zip, worlds, logs, downloader creds
+    .keep
   infra/
-    compose.yml            # docker compose (dev + prod profiles)
+    compose.yml            # dev + prod profiles
     env.dev
     env.prod
-  scripts/
-    bootstrap-macos.sh     # copy Server/ + Assets.zip from Hytale Launcher install
-    bootstrap-linux.sh     # download Server/ + Assets.zip via official downloader
-    up-dev.sh
-    up-prod.sh
-    auth-attach.sh
-    install-plugin.sh
+  scripts/                 # optional convenience scripts (later)
+  plugins/                 # (optional) your plugin source code
 ````
 
-### What is **not** committed
+### What is NOT committed (by design)
 
-`runtime/` contains:
+`runtime/` is your local / server state:
 
-* `Server/` (includes `HytaleServer.jar`, config, logs, mods, saves)
-* `Assets.zip`
-* `universe/`, `logs/`, etc.
+* `runtime/Server/` (includes `HytaleServer.jar`, configs, `mods/`, `universe/`, logs, etc.)
+* `runtime/Assets.zip`
+* downloader credentials file (if you use the downloader)
 
-These are environment-specific and can be large / license-bound.
+Add these to `.gitignore`.
 
 ---
 
 ## Prerequisites
 
-### macOS (development)
+### macOS / Windows (local dev)
 
 * Docker Desktop installed and running
+* If you use bind mounts on Windows/macOS, ensure Docker Desktop has permission to share the drive/folder containing this repo.
 
-### Ubuntu (production)
+### Ubuntu (prod)
 
-* Docker Engine + Docker Compose plugin installed
-* Firewall allows UDP port 5520:
+* Docker Engine + Docker Compose plugin
+* Open UDP port `5520`:
 
   ```bash
   sudo ufw allow 5520/udp
@@ -61,169 +55,207 @@ These are environment-specific and can be large / license-bound.
 
 ---
 
-## Quick start (macOS dev)
+## 1) Prepare `runtime/` (get `Server/` and `Assets.zip`)
 
-1. Prepare runtime from the installed Hytale Launcher:
+The server needs both:
 
-```bash
-./scripts/bootstrap-macos.sh
+* `Server/` folder
+* `Assets.zip`
+
+You have two ways to get them.
+
+### Option A — Copy from your installed Hytale Launcher (macOS + Windows + Linux)
+
+Find the launcher install directory, then copy `Server/` and `Assets.zip` into `./runtime/`.
+
+#### Windows (PowerShell)
+
+```powershell
+$src = Join-Path $env:APPDATA "Hytale\install\release\package\game\latest"
+New-Item -ItemType Directory -Force -Path ".\runtime" | Out-Null
+
+Remove-Item -Recurse -Force ".\runtime\Server" -ErrorAction SilentlyContinue
+Copy-Item -Recurse -Force (Join-Path $src "Server") ".\runtime\Server"
+Copy-Item -Force (Join-Path $src "Assets.zip") ".\runtime\Assets.zip"
 ```
 
-2. Start the dev server (attached console):
+#### macOS (bash)
 
 ```bash
-./scripts/up-dev.sh
+SRC="$HOME/Application Support/Hytale/install/release/package/game/latest"
+
+mkdir -p ./runtime
+rm -rf ./runtime/Server
+cp -R "$SRC/Server" ./runtime/Server
+cp "$SRC/Assets.zip" ./runtime/Assets.zip
 ```
 
-3. Authenticate the server (first run, in server console):
+#### Linux (bash)
+
+```bash
+SRC="${XDG_DATA_HOME:-$HOME/.local/share}/Hytale/install/release/package/game/latest"
+
+mkdir -p ./runtime
+rm -rf ./runtime/Server
+cp -R "$SRC/Server" ./runtime/Server
+cp "$SRC/Assets.zip" ./runtime/Assets.zip
+```
+
+### Option B — Use the official Hytale Downloader (Windows + Linux)
+
+This is recommended for servers because it makes updates easier.
+
+> The downloader is not available for macOS in the official distribution, so macOS typically uses Option A.
+
+#### Windows (PowerShell)
+
+```powershell
+New-Item -ItemType Directory -Force -Path ".\runtime" | Out-Null
+New-Item -ItemType Directory -Force -Path ".\.tools" | Out-Null
+
+Invoke-WebRequest "https://downloader.hytale.com/hytale-downloader.zip" -OutFile ".\.tools\hytale-downloader.zip"
+Expand-Archive ".\.tools\hytale-downloader.zip" -DestinationPath ".\.tools\hytale-downloader" -Force
+
+# Run the downloader (first run will prompt you to authenticate in a browser)
+& ".\.tools\hytale-downloader\hytale-downloader-windows-amd64.exe" -download-path ".\runtime\game.zip"
+
+# Extract the package and copy runtime files
+Expand-Archive ".\runtime\game.zip" -DestinationPath ".\runtime\game" -Force
+Remove-Item -Recurse -Force ".\runtime\Server" -ErrorAction SilentlyContinue
+Copy-Item -Recurse -Force ".\runtime\game\Server" ".\runtime\Server"
+Copy-Item -Force ".\runtime\game\Assets.zip" ".\runtime\Assets.zip"
+```
+
+#### Linux (bash)
+
+```bash
+mkdir -p ./.tools ./runtime
+
+curl -L "https://downloader.hytale.com/hytale-downloader.zip" -o ./.tools/hytale-downloader.zip
+unzip -o ./.tools/hytale-downloader.zip -d ./.tools/hytale-downloader
+chmod +x ./.tools/hytale-downloader/hytale-downloader-linux-amd64
+
+./.tools/hytale-downloader/hytale-downloader-linux-amd64 -download-path ./runtime/game.zip
+
+unzip -o ./runtime/game.zip -d ./runtime/game
+rm -rf ./runtime/Server
+cp -R ./runtime/game/Server ./runtime/Server
+cp ./runtime/game/Assets.zip ./runtime/Assets.zip
+```
+
+---
+
+## 2) Run the server (Docker Compose)
+
+### Dev (localhost, interactive console)
+
+Works the same on macOS / Windows / Linux:
+
+```bash
+docker compose -f infra/compose.yml --env-file infra/env.dev --profile dev up
+```
+
+On the first run, authenticate the server in the console:
 
 ```text
 /auth login device
 ```
-
-After that, your client can connect to:
-
-* `127.0.0.1:5520` (UDP / QUIC)
 
 Stop with `Ctrl+C`.
 
+### Prod (Ubuntu, background)
+
+```bash
+docker compose -f infra/compose.yml --env-file infra/env.prod --profile prod up -d
+```
+
+Attach to the console (to run auth or admin commands):
+
+```bash
+docker compose -f infra/compose.yml --profile prod attach hytale-prod
+```
+
+Stop:
+
+```bash
+docker compose -f infra/compose.yml --profile prod down
+```
+
 ---
 
-## Quick start (Ubuntu prod)
+## 3) Firewall / Port forwarding (UDP only)
 
-1. Prepare runtime by downloading the server package:
-
-```bash
-./scripts/bootstrap-linux.sh
-```
-
-2. Start in background:
+### Ubuntu (ufw)
 
 ```bash
-./scripts/up-prod.sh
+sudo ufw allow 5520/udp
 ```
 
-3. Attach to the server console to authenticate:
+### Windows Firewall (PowerShell)
 
-```bash
-./scripts/auth-attach.sh
+```powershell
+New-NetFirewallRule -DisplayName "Hytale Server" -Direction Inbound -Protocol UDP -LocalPort 5520 -Action Allow
 ```
 
-Then run in the console:
+If you are hosting from home behind a router, forward **UDP 5520**.
+
+---
+
+## 4) Plugins / Mods
+
+Place plugin/mod files into:
 
 ```text
-/auth login device
+runtime/Server/mods/
 ```
 
-To stop:
+Typical formats:
 
-```bash
-cd infra
-docker compose --profile prod down
+* `.jar` (server plugins)
+* `.zip` (mods)
+
+Restart the server after adding/updating plugins unless you have a proven hot-reload workflow.
+
+---
+
+## 5) Persistent data (worlds, logs, config)
+
+Everything persists under:
+
+```text
+runtime/Server/
+  universe/        # world / player data
+  mods/            # plugins/mods
+  logs/            # logs
+  config.json      # server config
+  permissions.json # permissions
 ```
 
----
-
-## Dev vs Prod configuration
-
-Environment files:
-
-* `infra/env.dev` — smaller memory, dev-friendly flags
-* `infra/env.prod` — larger memory, production flags
-
-You can edit:
-
-* `JAVA_XMS`, `JAVA_XMX`
-* `HYTALE_PORT` (remember to change firewall / port mapping if you change it)
-* `HYTALE_EXTRA_ARGS` (additional server flags)
-
-Example (dev offline auth for fully local testing):
-
-```env
-HYTALE_EXTRA_ARGS=--auth-mode offline
-```
+Back up `runtime/Server/universe/` and your configs for production.
 
 ---
 
-## Installing your plugin (.jar)
+## 6) Updating the server runtime
 
-The server loads plugins/mods from `mods/`.
+### Windows / Linux (Downloader)
 
-Copy a built plugin jar into the server mods folder:
+Re-run the downloader steps, then restart the container.
 
-```bash
-./scripts/install-plugin.sh path/to/your-plugin.jar
-```
+### macOS (Launcher copy)
 
-Then restart the server (in dev: `Ctrl+C` and run `./scripts/up-dev.sh` again; in prod: restart the container).
+Re-copy `Server/` and `Assets.zip` from the launcher install directory, then restart the container.
 
 ---
 
-## Logs, worlds, configuration
+## Troubleshooting
 
-All persistent data lives under `runtime/Server/`, including:
+### “Client can’t connect”
 
-* `runtime/Server/universe/` (world data)
-* `runtime/Server/logs/`
-* `runtime/Server/mods/`
-* `runtime/Server/config.json`
-* `runtime/Server/permissions.json`
+* Verify you exposed **UDP** `5520/udp` (not TCP).
+* Check firewall rules and router forwarding.
+* Ensure your client and server are on compatible versions.
 
-Back up `runtime/Server/` (or at least `universe/` + configs) for production.
+### “Changes don’t persist”
 
----
-
-## Common issues
-
-### “I can’t connect”
-
-* Make sure you exposed **UDP** port `5520/udp` (not TCP).
-* On Ubuntu, verify firewall:
-
-  ```bash
-  sudo ufw status
-  ```
-* Ensure client/server protocol versions match (use the same game release).
-
-### “Server asks for auth every time”
-
-* Make sure `runtime/` is mounted correctly and persists between restarts.
-* Don’t delete the runtime folder between runs.
-
----
-
-## Updating the server runtime
-
-### Ubuntu
-
-Re-run:
-
-```bash
-./scripts/bootstrap-linux.sh
-./scripts/up-prod.sh
-```
-
-### macOS
-
-If the Launcher updated the game, re-run:
-
-```bash
-./scripts/bootstrap-macos.sh
-./scripts/up-dev.sh
-```
-
----
-
-## Security notes (prod)
-
-* Bind to `0.0.0.0` only on servers you control.
-* Only open the required UDP port.
-* Consider running behind a VPN if you want a private environment.
-
----
-
-## Next steps
-
-* Add a `plugins/` folder with your plugin source (Gradle/Maven).
-* Add a script to auto-build plugin and copy into `runtime/Server/mods/`.
-* Add backups for `runtime/Server/universe/` on production.
+* Confirm `runtime/` is mounted correctly and not being overwritten.
+* Don’t delete `runtime/` between runs.
