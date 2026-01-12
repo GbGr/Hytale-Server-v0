@@ -1,0 +1,63 @@
+services:
+  hytale-dev:
+    profiles: ["dev"]
+    image: eclipse-temurin:25-jre
+    working_dir: /srv/hytale/Server
+    volumes:
+      - ../runtime:/srv/hytale
+    command: >
+      sh -lc "
+      if [ ! -f /srv/hytale/Server/HytaleServer.jar ]; then
+        echo 'ERROR: Missing runtime/Server/HytaleServer.jar';
+        echo 'Run bootstrap first to populate ./runtime (Server/ + Assets.zip).';
+        exit 1;
+      fi;
+      if [ ! -f /srv/hytale/Assets.zip ]; then
+        echo 'ERROR: Missing runtime/Assets.zip';
+        echo 'Run bootstrap first to populate ./runtime (Server/ + Assets.zip).';
+        exit 1;
+      fi;
+      exec java -Xms${JAVA_XMS:-2G} -Xmx${JAVA_XMX:-4G} \
+        -XX:AOTCache=HytaleServer.aot \
+        -jar HytaleServer.jar \
+        --assets /srv/hytale/Assets.zip \
+        --disable-sentry \
+        --bind 0.0.0.0:${HYTALE_PORT:-5520} \
+        ${HYTALE_EXTRA_ARGS:-}
+      "
+    ports:
+      - "${HYTALE_PORT:-5520}:${HYTALE_PORT:-5520}/udp"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  hytale-prod:
+    profiles: ["prod"]
+    image: eclipse-temurin:25-jre
+    working_dir: /srv/hytale/Server
+    volumes:
+      - ../runtime:/srv/hytale
+    command: >
+      sh -lc "
+      if [ ! -f /srv/hytale/Server/HytaleServer.jar ]; then
+        echo 'ERROR: Missing runtime/Server/HytaleServer.jar';
+        echo 'Run bootstrap first to populate ./runtime (Server/ + Assets.zip).';
+        exit 1;
+      fi;
+      if [ ! -f /srv/hytale/Assets.zip ]; then
+        echo 'ERROR: Missing runtime/Assets.zip';
+        echo 'Run bootstrap first to populate ./runtime (Server/ + Assets.zip).';
+        exit 1;
+      fi;
+      exec java -Xms${JAVA_XMS:-2G} -Xmx${JAVA_XMX:-8G} \
+        -XX:AOTCache=HytaleServer.aot \
+        -jar HytaleServer.jar \
+        --assets /srv/hytale/Assets.zip \
+        --bind 0.0.0.0:${HYTALE_PORT:-5520} \
+        ${HYTALE_EXTRA_ARGS:-}
+      "
+    ports:
+      - "${HYTALE_PORT:-5520}:${HYTALE_PORT:-5520}/udp"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
