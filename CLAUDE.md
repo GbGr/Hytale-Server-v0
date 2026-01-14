@@ -154,3 +154,49 @@ public class MyPlugin extends JavaPlugin {
 - **First Run Auth:** Run `/auth persistence Encrypted` then `/auth login device` in server console
 - **macOS Docker:** Requires `vpnkit` network type in Docker Desktop settings for UDP/QUIC to work
 - **Auth Persistence:** Requires stable `runtime/machine-id` mounted to `/etc/machine-id:ro` in container
+
+## Server API Documentation
+
+Decompiled HytaleServer.jar documentation is available in `docs/`:
+
+- **[docs/API_INDEX.md](docs/API_INDEX.md)** - Main index and quick reference
+- **[docs/packages/plugin.md](docs/packages/plugin.md)** - Plugin system (JavaPlugin, lifecycle, registries)
+- **[docs/packages/event.md](docs/packages/event.md)** - Event system (EventBus, player/entity/block events)
+- **[docs/packages/entity.md](docs/packages/entity.md)** - Entity system (Player, Entity, components)
+- **[docs/packages/command.md](docs/packages/command.md)** - Command system (registration, arguments)
+- **[docs/packages/universe.md](docs/packages/universe.md)** - World system (Universe, World, chunks, blocks)
+- **[docs/packages/component.md](docs/packages/component.md)** - ECS (Entity Component System)
+
+Full decompiled sources: `docs/decompiled/`
+
+### Key Packages
+
+| Package | Description |
+|---------|-------------|
+| `com.hypixel.hytale.server.core.plugin` | Plugin loading and lifecycle |
+| `com.hypixel.hytale.server.core.entity` | Entities (Player, LivingEntity) |
+| `com.hypixel.hytale.server.core.event.events` | Server events |
+| `com.hypixel.hytale.server.core.command.system` | Commands |
+| `com.hypixel.hytale.server.core.universe` | Worlds and chunks |
+| `com.hypixel.hytale.component` | ECS architecture |
+| `com.hypixel.hytale.logger` | HytaleLogger |
+
+### Quick Plugin Example
+
+```java
+public class MyPlugin extends JavaPlugin {
+    public MyPlugin(JavaPluginInit init) { super(init); }
+
+    @Override
+    protected void setup() {
+        // Register event listener
+        getEventRegistry().subscribe(PlayerConnectEvent.class, event -> {
+            PlayerRef ref = event.getPlayerRef();
+            getLogger().info("Player connected: " + ref.getUsername());
+        });
+
+        // Register command
+        getCommandRegistry().register(new MyCommand());
+    }
+}
+```

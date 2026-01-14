@@ -93,3 +93,10 @@ pnpm-debug.log*
 # (If your infra/env.dev and infra/env.prod are safe, remove these ignores)
 # infra/env.dev
 # infra/env.prod
+
+# =========================
+# Decompiled sources (large, regeneratable)
+# =========================
+# Keep docs/packages/*.md and docs/API_INDEX.md (documentation)
+# Exclude decompiled sources (~140MB, can be regenerated)
+/docs/decompiled/
