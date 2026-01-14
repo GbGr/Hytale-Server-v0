@@ -1,12 +1,21 @@
-````md
-# Hytale Server Monorepo (Dev on localhost + Prod on Ubuntu) — Docker Compose
+# Hytale Server (Dev on localhost + Prod on Ubuntu) — Docker Compose Monorepo
 
-This repo is designed so you can:
-- run a **local dev server** on **macOS / Windows / Linux** with the same commands
-- deploy the same setup to an **Ubuntu** host for production
-- keep **your code + infra** in git, while keeping **Hytale runtime binaries/assets/world data** out of git
+This repository is built to make Hytale Server development and deployment **repeatable**:
 
-> Networking note: Hytale Server uses **QUIC over UDP** (default `5520/udp`), not TCP.
+- **Local dev** on **macOS** or **Windows** using **Docker**
+- **Production** deployment on **Ubuntu** using the same Docker Compose setup
+- Your **code + infra** lives in Git
+- Hytale **runtime binaries/assets/world data** live in `runtime/` and are **not committed**
+
+---
+
+## Key points (read once)
+
+- Hytale Server uses **QUIC over UDP** (default port **5520/udp**) — *not TCP*
+- First run requires authentication via:
+  - `/auth persistence Encrypted`
+  - `/auth login device`
+- In Docker, auth persistence requires a stable `machine-id` mounted into the container (explained below)
 
 ---
 
@@ -15,60 +24,79 @@ This repo is designed so you can:
 ```text
 my-hytale/
   README.md
-  runtime/                 # NOT COMMITTED: Server/, Assets.zip, worlds, logs, downloader creds
-    .keep
+  .gitignore
+
+  runtime/                 # NOT COMMITTED
+    Assets.zip
+    Server/                # config.json, auth.enc, mods/, universe/, logs/, ...
+    machine-id             # created once (for auth persistence in Docker)
+
   infra/
     compose.yml            # dev + prod profiles
     env.dev
     env.prod
-  scripts/                 # optional convenience scripts (later)
-  plugins/                 # (optional) your plugin source code
 ````
-
-### What is NOT committed (by design)
-
-`runtime/` is your local / server state:
-
-* `runtime/Server/` (includes `HytaleServer.jar`, configs, `mods/`, `universe/`, logs, etc.)
-* `runtime/Assets.zip`
-* downloader credentials file (if you use the downloader)
-
-Add these to `.gitignore`.
 
 ---
 
 ## Prerequisites
 
-### macOS / Windows (local dev)
+### macOS (local dev)
 
 * Docker Desktop installed and running
-* If you use bind mounts on Windows/macOS, ensure Docker Desktop has permission to share the drive/folder containing this repo.
+* Hytale Launcher installed and game downloaded
 
-### Ubuntu (prod)
+### Windows 10/11 (local dev)
+
+* Docker Desktop installed and running (WSL2 backend recommended)
+* Hytale Launcher installed and game downloaded
+* PowerShell (built-in)
+
+### Ubuntu (production)
 
 * Docker Engine + Docker Compose plugin
-* Open UDP port `5520`:
-
-  ```bash
-  sudo ufw allow 5520/udp
-  ```
+* Open UDP port 5520 (or the port you configured)
 
 ---
 
-## 1) Prepare `runtime/` (get `Server/` and `Assets.zip`)
+# Local development (Docker)
 
-The server needs both:
+## Step 1 — Prepare runtime files (Server + Assets.zip)
 
-* `Server/` folder
+The server requires **both**:
+
+* `Server/` directory
 * `Assets.zip`
 
-You have two ways to get them.
+You copy them from the Hytale Launcher install directory into `./runtime/`.
 
-### Option A — Copy from your installed Hytale Launcher (macOS + Windows + Linux)
+### macOS (Terminal)
 
-Find the launcher install directory, then copy `Server/` and `Assets.zip` into `./runtime/`.
+Hytale Launcher install location is typically one of these:
 
-#### Windows (PowerShell)
+* `~/Application Support/Hytale/install/release/package/game/latest`
+* `~/Library/Application Support/Hytale/install/release/package/game/latest`
+
+Run:
+
+```bash
+mkdir -p ./runtime
+
+SRC="$HOME/Application Support/Hytale/install/release/package/game/latest"
+[ -d "$SRC" ] || SRC="$HOME/Library/Application Support/Hytale/install/release/package/game/latest"
+
+rm -rf ./runtime/Server
+cp -R "$SRC/Server" ./runtime/Server
+cp "$SRC/Assets.zip" ./runtime/Assets.zip
+```
+
+### Windows (PowerShell)
+
+Launcher install location:
+
+* `%APPDATA%\Hytale\install\release\package\game\latest`
+
+Run from repo root:
 
 ```powershell
 $src = Join-Path $env:APPDATA "Hytale\install\release\package\game\latest"
@@ -79,183 +107,279 @@ Copy-Item -Recurse -Force (Join-Path $src "Server") ".\runtime\Server"
 Copy-Item -Force (Join-Path $src "Assets.zip") ".\runtime\Assets.zip"
 ```
 
-#### macOS (bash)
+### Verify runtime exists (macOS/Windows)
 
-```bash
-SRC="$HOME/Application Support/Hytale/install/release/package/game/latest"
+You should have:
 
-mkdir -p ./runtime
-rm -rf ./runtime/Server
-cp -R "$SRC/Server" ./runtime/Server
-cp "$SRC/Assets.zip" ./runtime/Assets.zip
+```text
+runtime/
+  Assets.zip
+  Server/
+    HytaleServer.jar
+    ...
 ```
 
-#### Linux (bash)
+macOS check:
 
 ```bash
-SRC="${XDG_DATA_HOME:-$HOME/.local/share}/Hytale/install/release/package/game/latest"
-
-mkdir -p ./runtime
-rm -rf ./runtime/Server
-cp -R "$SRC/Server" ./runtime/Server
-cp "$SRC/Assets.zip" ./runtime/Assets.zip
+ls -lah runtime/Server/HytaleServer.jar runtime/Assets.zip
 ```
 
-### Option B — Use the official Hytale Downloader (Windows + Linux)
-
-This is recommended for servers because it makes updates easier.
-
-> The downloader is not available for macOS in the official distribution, so macOS typically uses Option A.
-
-#### Windows (PowerShell)
+Windows check:
 
 ```powershell
-New-Item -ItemType Directory -Force -Path ".\runtime" | Out-Null
-New-Item -ItemType Directory -Force -Path ".\.tools" | Out-Null
-
-Invoke-WebRequest "https://downloader.hytale.com/hytale-downloader.zip" -OutFile ".\.tools\hytale-downloader.zip"
-Expand-Archive ".\.tools\hytale-downloader.zip" -DestinationPath ".\.tools\hytale-downloader" -Force
-
-# Run the downloader (first run will prompt you to authenticate in a browser)
-& ".\.tools\hytale-downloader\hytale-downloader-windows-amd64.exe" -download-path ".\runtime\game.zip"
-
-# Extract the package and copy runtime files
-Expand-Archive ".\runtime\game.zip" -DestinationPath ".\runtime\game" -Force
-Remove-Item -Recurse -Force ".\runtime\Server" -ErrorAction SilentlyContinue
-Copy-Item -Recurse -Force ".\runtime\game\Server" ".\runtime\Server"
-Copy-Item -Force ".\runtime\game\Assets.zip" ".\runtime\Assets.zip"
-```
-
-#### Linux (bash)
-
-```bash
-mkdir -p ./.tools ./runtime
-
-curl -L "https://downloader.hytale.com/hytale-downloader.zip" -o ./.tools/hytale-downloader.zip
-unzip -o ./.tools/hytale-downloader.zip -d ./.tools/hytale-downloader
-chmod +x ./.tools/hytale-downloader/hytale-downloader-linux-amd64
-
-./.tools/hytale-downloader/hytale-downloader-linux-amd64 -download-path ./runtime/game.zip
-
-unzip -o ./runtime/game.zip -d ./runtime/game
-rm -rf ./runtime/Server
-cp -R ./runtime/game/Server ./runtime/Server
-cp ./runtime/game/Assets.zip ./runtime/Assets.zip
+Get-Item .\runtime\Server\HytaleServer.jar, .\runtime\Assets.zip
 ```
 
 ---
 
-## 2) Run the server (Docker Compose)
+## Step 2 — Fix Docker auth persistence (required)
 
-### Dev (localhost, interactive console)
+If you authenticate and then see auth reset after container restart, or you see warnings like:
 
-Works the same on macOS / Windows / Linux:
+```text
+Cannot save credentials - no encryption key available
+```
+
+you need a stable machine-id mounted into the container.
+
+### 2.1 Create `runtime/machine-id` (one-time)
+
+#### macOS (Terminal)
+
+```bash
+mkdir -p runtime
+uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]' > runtime/machine-id
+echo >> runtime/machine-id
+```
+
+#### Windows (PowerShell)
+
+```powershell
+New-Item -ItemType Directory -Force runtime | Out-Null
+([guid]::NewGuid().ToString("N")).ToLower() | Out-File -Encoding ascii runtime\machine-id
+```
+
+> Do NOT change `runtime/machine-id` later. If you do, you’ll need to re-authenticate.
+
+### 2.2 Ensure `machine-id` is mounted in `infra/compose.yml`
+
+Your `hytale-dev` service must include:
+
+```yaml
+volumes:
+  - ../runtime:/srv/hytale
+  - ../runtime/machine-id:/etc/machine-id:ro
+```
+
+---
+
+## Step 3 — macOS-only: Docker Desktop UDP/QUIC networking fix
+
+If the server works **natively** but **not** through Docker on macOS, switch Docker Desktop networking to `vpnkit`.
+
+1. Quit Docker Desktop
+2. Edit this file:
+   `~/Library/Group Containers/group.com.docker/settings.json`
+3. Set:
+
+```json
+{ "networkType": "vpnkit" }
+```
+
+4. Start Docker Desktop again
+
+---
+
+## Step 4 — Run the dev server (Docker)
+
+From repo root:
 
 ```bash
 docker compose -f infra/compose.yml --env-file infra/env.dev --profile dev up
 ```
 
-On the first run, authenticate the server in the console:
+You should see a port mapping like:
 
 ```text
-/auth login device
+0.0.0.0:5520->5520/udp
 ```
 
-Stop with `Ctrl+C`.
-
-### Prod (Ubuntu, background)
+### Check container status
 
 ```bash
-docker compose -f infra/compose.yml --env-file infra/env.prod --profile prod up -d
-```
-
-Attach to the console (to run auth or admin commands):
-
-```bash
-docker compose -f infra/compose.yml --profile prod attach hytale-prod
-```
-
-Stop:
-
-```bash
-docker compose -f infra/compose.yml --profile prod down
+docker compose -f infra/compose.yml --profile dev ps
 ```
 
 ---
 
-## 3) Firewall / Port forwarding (UDP only)
+## Step 5 — Authenticate (first run only)
 
-### Ubuntu (ufw)
+Attach to the server console:
+
+```bash
+docker compose -f infra/compose.yml --profile dev attach hytale-dev
+```
+
+Then run in the server console:
+
+```text
+/auth persistence Encrypted
+/auth login device
+```
+
+Follow the URL + code shown to complete authentication.
+
+### Verify auth file exists
+
+After successful auth, you should see:
+
+```text
+runtime/Server/auth.enc
+```
+
+macOS:
+
+```bash
+ls -lah runtime/Server/auth.enc
+```
+
+Windows:
+
+```powershell
+Get-Item .\runtime\Server\auth.enc
+```
+
+### Verify auth survives restarts
+
+Restart:
+
+```bash
+docker compose -f infra/compose.yml --profile dev restart
+```
+
+Re-attach and check:
+
+```text
+/auth status
+```
+
+---
+
+## Connecting to your local server
+
+From the same machine:
+
+* Address: `127.0.0.1`
+* Port: `5520`
+* Or: `127.0.0.1:5520`
+
+---
+
+# Local dev on Windows: Firewall note (UDP)
+
+If you connect from another device on the LAN to your Windows host, allow inbound UDP:
+
+```powershell
+New-NetFirewallRule -DisplayName "Hytale Server (UDP 5520)" -Direction Inbound -Protocol UDP -LocalPort 5520 -Action Allow
+```
+
+---
+
+# Production on Ubuntu (Docker)
+
+## 1) Prepare runtime
+
+On Ubuntu you typically download runtime via the official downloader (or copy from an existing install).
+Once you have runtime, the folder should look like:
+
+```text
+runtime/
+  Assets.zip
+  Server/
+  machine-id
+```
+
+You can reuse the same `runtime/machine-id` approach (recommended for consistency).
+
+## 2) Open UDP port
 
 ```bash
 sudo ufw allow 5520/udp
 ```
 
-### Windows Firewall (PowerShell)
+## 3) Run prod profile
 
-```powershell
-New-NetFirewallRule -DisplayName "Hytale Server" -Direction Inbound -Protocol UDP -LocalPort 5520 -Action Allow
+```bash
+docker compose -f infra/compose.yml --env-file infra/env.prod --profile prod up -d
 ```
 
-If you are hosting from home behind a router, forward **UDP 5520**.
+Attach console if you need to run admin/auth commands:
+
+```bash
+docker compose -f infra/compose.yml --profile prod attach hytale-prod
+```
 
 ---
 
-## 4) Plugins / Mods
+# Plugins / Mods workflow
 
-Place plugin/mod files into:
+Hytale loads mods/plugins from:
 
 ```text
 runtime/Server/mods/
 ```
 
-Typical formats:
+Typical loop:
 
-* `.jar` (server plugins)
-* `.zip` (mods)
+1. Build your plugin jar
+2. Copy it into `runtime/Server/mods/`
+3. Restart server or use an in-server plugin reload command (if available)
 
-Restart the server after adding/updating plugins unless you have a proven hot-reload workflow.
-
----
-
-## 5) Persistent data (worlds, logs, config)
-
-Everything persists under:
-
-```text
-runtime/Server/
-  universe/        # world / player data
-  mods/            # plugins/mods
-  logs/            # logs
-  config.json      # server config
-  permissions.json # permissions
-```
-
-Back up `runtime/Server/universe/` and your configs for production.
+Because `runtime/` is mounted into the container, changes to `mods/` persist and are visible to the server.
 
 ---
 
-## 6) Updating the server runtime
+# Troubleshooting
 
-### Windows / Linux (Downloader)
+## Client cannot connect (Docker only)
 
-Re-run the downloader steps, then restart the container.
+* Confirm UDP mapping exists:
 
-### macOS (Launcher copy)
+  ```bash
+  docker compose -f infra/compose.yml --profile dev ps
+  ```
 
-Re-copy `Server/` and `Assets.zip` from the launcher install directory, then restart the container.
+  Must show `5520->5520/udp`
+* macOS only: ensure Docker Desktop `networkType` is `vpnkit`
+* Ensure you are connecting to `127.0.0.1:5520` (IPv4), not just `localhost` (can resolve to IPv6)
+
+## Auth resets after container restart
+
+* Ensure `runtime/machine-id` exists
+* Ensure compose mounts it to `/etc/machine-id:ro`
+* Ensure you ran:
+
+  ```text
+  /auth persistence Encrypted
+  ```
+* Ensure `runtime/Server/auth.enc` exists and is not deleted
+
+## “Cannot save credentials - no encryption key available”
+
+* This means `machine-id` is missing/unstable inside the container
+* Fix Step 2 above (create + mount `runtime/machine-id`)
 
 ---
 
-## Troubleshooting
+# Notes on what is persisted
 
-### “Client can’t connect”
+Everything under `runtime/Server/` persists across restarts:
 
-* Verify you exposed **UDP** `5520/udp` (not TCP).
-* Check firewall rules and router forwarding.
-* Ensure your client and server are on compatible versions.
+* `universe/` (world + player data)
+* `mods/` (plugins/mods)
+* `logs/`
+* `config.json`, `permissions.json`
+* `auth.enc` (when Encrypted persistence is enabled)
 
-### “Changes don’t persist”
-
-* Confirm `runtime/` is mounted correctly and not being overwritten.
-* Don’t delete `runtime/` between runs.
+Back up `runtime/Server/universe/` for production.

@@ -1,0 +1,38 @@
+services:
+  hytale:
+    build:
+      context: .
+      dockerfile: docker/server/Dockerfile
+    image: hytale-server:local
+    container_name: hytale-server
+    restart: unless-stopped
+
+    # QUIC uses UDP, so expose UDP
+    ports:
+      - "${HYTALE_PORT:-5520}:${HYTALE_PORT:-5520}/udp"
+
+    environment:
+      # Where the mounted server files live in the container
+      HYTALE_DIR: /srv/hytale
+
+      # Server params
+      HYTALE_BIND: "0.0.0.0:${HYTALE_PORT:-5520}"
+      HYTALE_ASSETS: "/srv/hytale/Assets.zip"
+
+      # JVM tuning (safe defaults)
+      JAVA_OPTS: "${JAVA_OPTS:--Xms1G -Xmx4G}"
+
+      # Recommended during plugin dev (prevents sending your crashes)
+      HYTALE_DISABLE_SENTRY: "${HYTALE_DISABLE_SENTRY:-true}"
+
+      # Optional: if you use early plugins
+      HYTALE_ACCEPT_EARLY_PLUGINS: "${HYTALE_ACCEPT_EARLY_PLUGINS:-false}"
+
+      # Optional: add extra args (e.g. backups, custom bind, etc.)
+      HYTALE_EXTRA_ARGS: "${HYTALE_EXTRA_ARGS:-}"
+
+    volumes:
+      # You keep server binaries + worlds outside the image for easy updates
+      - ./runtime/server:/srv/hytale:rw
+
+    # Healthcheck is tricky for UDP/QUIC; keep it simple for now.

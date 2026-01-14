@@ -1,0 +1,8 @@
+{
+  "Group": "com.example",
+  "Name": "MyPlugin",
+  "Version": "0.1.0",
+  "Description": "My first Hytale server plugin",
+  "Main": "com.example.myplugin.MyPlugin",
+  "Authors": [{ "Name": "Pavlik" }]
+}
