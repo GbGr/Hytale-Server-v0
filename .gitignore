@@ -4,6 +4,16 @@
 /runtime/*
 !/runtime/.keep
 
+# =========================
+# Generated plugin files (after init)
+# =========================
+/src/
+/build.gradle.kts
+/settings.gradle.kts
+/gradlew
+/gradlew.bat
+/gradle/
+
 # If you use the Hytale Downloader, it may create credentials in the repo root
 .hytale-downloader-credentials.json
 
