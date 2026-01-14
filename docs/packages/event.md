@@ -20,22 +20,22 @@ public class MyPlugin extends JavaPlugin {
 
     @Override
     protected void setup() {
-        // Subscribe to player connect
-        getEventRegistry().subscribe(PlayerConnectEvent.class, this::onPlayerConnect);
+        // Subscribe to global events (player connect, chat)
+        getEventRegistry().registerGlobal(PlayerConnectEvent.class, this::onPlayerConnect);
+        getEventRegistry().registerGlobal(PlayerChatEvent.class, this::onChat);
 
-        // Subscribe to chat with priority
-        getEventRegistry().subscribe(PlayerChatEvent.class, EventPriority.HIGH, this::onChat);
-
-        // Subscribe to block break
-        getEventRegistry().subscribe(BreakBlockEvent.class, this::onBlockBreak);
+        // Block events use EntityEventSystem (see ECS Events section below)
     }
 
     private void onPlayerConnect(PlayerConnectEvent event) {
         PlayerRef playerRef = event.getPlayerRef();
-        getLogger().info("Player connected: " + playerRef.getUsername());
+        getLogger().atInfo().log("Player connected: " + playerRef.getUsername());
 
-        // Optionally set spawn world
-        event.setWorld(someWorld);
+        // Optionally redirect to different world
+        World targetWorld = Universe.get().getWorld("myworld");
+        if (targetWorld != null) {
+            event.setWorld(targetWorld);
+        }
     }
 
     private void onChat(PlayerChatEvent event) {
@@ -43,13 +43,6 @@ public class MyPlugin extends JavaPlugin {
         if (event.getContent().contains("bad")) {
             event.setCancelled(true);
         }
-    }
-
-    private void onBlockBreak(BreakBlockEvent event) {
-        Vector3i pos = event.getTargetBlock();
-        BlockType type = event.getBlockType();
-        // Cancel if needed
-        event.setCancelled(true);
     }
 }
 ```
@@ -103,6 +96,14 @@ public class MyPlugin extends JavaPlugin {
 | `EntityRemoveEvent` | No | Entity being removed |
 | `LivingEntityInventoryChangeEvent` | No | Inventory changed |
 | `LivingEntityUseBlockEvent` | No | Entity using block |
+
+### World Events (`server.core.universe.world.events`)
+
+| Event | Cancellable | Description |
+|-------|-------------|-------------|
+| `AddWorldEvent` | Yes | World being added to universe |
+| `RemoveWorldEvent` | Yes | World being removed |
+| `AllWorldsLoadedEvent` | No | All worlds finished loading on startup |
 
 ### Server Events
 
@@ -191,10 +192,11 @@ Block events like `BreakBlockEvent` are ECS events that should be handled via `E
 
 ### Two Ways to Handle Events
 
-**1. EventRegistry (simple events like PlayerConnect)**
+**1. EventRegistry (global events like PlayerConnect, Chat)**
 ```java
-getEventRegistry().subscribe(PlayerConnectEvent.class, event -> {
+getEventRegistry().registerGlobal(PlayerConnectEvent.class, event -> {
     PlayerRef ref = event.getPlayerRef();
+    event.setWorld(targetWorld);  // redirect to world
 });
 ```
 
@@ -217,7 +219,7 @@ public class MySystem implements EntityEventSystem<EntityStore, BreakBlockEvent>
 }
 
 // Register in setup()
-getEntityStoreRegistry().register(new MySystem());
+getEntityStoreRegistry().registerSystem(new MySystem());
 ```
 
 ### When to Use Which

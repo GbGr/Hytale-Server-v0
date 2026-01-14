@@ -31,7 +31,7 @@ public class MyPlugin extends JavaPlugin {
     protected void setup() {
         // Called during plugin setup phase
         // Register commands, events, components here
-        LOGGER.info("MyPlugin setup!");
+        LOGGER.atInfo().log("MyPlugin setup!");
     }
 
     @Override
@@ -150,9 +150,10 @@ public class MyPlugin extends JavaPlugin {
 ### From PluginBase
 
 ```java
-// Logging
-getLogger().info("Message");
-getLogger().at(Level.WARNING).log("Formatted %s", value);
+// Logging (HytaleLogger uses fluent API)
+getLogger().atInfo().log("Message");
+getLogger().atWarning().log("Formatted %s", value);
+getLogger().atSevere().withCause(exception).log("Error: %s", msg);
 
 // Identity
 getIdentifier()       // PluginIdentifier (Group:Name)
@@ -226,7 +227,7 @@ public class LuckyMining extends JavaPlugin {
     protected void setup() {
         config.save();
         // Register ECS system for block break events
-        getEntityStoreRegistry().register(new BreakBlockEventSystem(config));
+        getEntityStoreRegistry().registerSystem(new BreakBlockEventSystem(config));
     }
 }
 ```

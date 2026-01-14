@@ -166,6 +166,7 @@ Decompiled HytaleServer.jar documentation is available in `docs/`:
 - **[docs/packages/command.md](docs/packages/command.md)** - Command system (registration, arguments)
 - **[docs/packages/universe.md](docs/packages/universe.md)** - World system (Universe, World, chunks, blocks)
 - **[docs/packages/component.md](docs/packages/component.md)** - ECS (Entity Component System)
+- **[docs/packages/ui.md](docs/packages/ui.md)** - Custom UI system (.ui files, InteractiveCustomUIPage, asset packs)
 
 Full decompiled sources: `docs/decompiled/`
 
@@ -190,13 +191,52 @@ public class MyPlugin extends JavaPlugin {
     @Override
     protected void setup() {
         // Register event listener
-        getEventRegistry().subscribe(PlayerConnectEvent.class, event -> {
+        getEventRegistry().registerGlobal(PlayerConnectEvent.class, event -> {
             PlayerRef ref = event.getPlayerRef();
             getLogger().info("Player connected: " + ref.getUsername());
         });
+
+        // Register ECS system
+        getEntityStoreRegistry().registerSystem(new MyBlockBreakSystem());
 
         // Register command
         getCommandRegistry().register(new MyCommand());
     }
 }
 ```
+
+### Custom UI Quick Reference
+
+**Asset pack structure:**
+```
+src/main/resources/
+├── manifest.json              # Must have "IncludesAssetPack": true (with 's'!)
+└── Common/UI/Custom/Pages/
+    └── PluginName_PageName.ui # UI file
+```
+
+**UI file syntax (.ui):**
+```
+$C = "../Common.ui";
+
+$C.@PageOverlay {}
+
+$C.@DecoratedContainer {
+  Anchor: (Width: 400, Height: 200);
+  #Title { Group { $C.@Title { @Text = "Title"; } } }
+  #Content { Label { Text: "Hello!"; } }
+}
+
+$C.@BackButton #CloseButton {}
+```
+
+**Java code:**
+```java
+// Open page
+player.getPageManager().openCustomPage(ref, store, new MyPage(playerRef));
+
+// Close page
+player.getPageManager().setPage(ref, store, Page.None);
+```
+
+See [docs/packages/ui.md](docs/packages/ui.md) for complete UI documentation.

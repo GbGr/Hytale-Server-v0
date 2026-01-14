@@ -47,7 +47,7 @@ Copy-Item -Recurse "$src\Server" runtime\Server
 Copy-Item "$src\Assets.zip" runtime\Assets.zip
 ```
 
-### 3. Create machine-id (for auth persistence)
+### 3. Create machine-id file (for auth persistence)
 
 **macOS/Linux:**
 ```bash
@@ -56,8 +56,10 @@ uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]' > runtime/machine-id
 
 **Windows:**
 ```powershell
-([guid]::NewGuid().ToString("N")).ToLower() | Out-File -Encoding ascii runtime\machine-id
+([guid]::NewGuid().ToString("N")).ToLower() | Out-File -Encoding ascii -NoNewline runtime\machine-id
 ```
+
+> **Note:** `machine-id` must be a **file**, not a directory. If you accidentally created a directory, remove it first: `rm -rf runtime/machine-id`
 
 ### 4. Start Server
 

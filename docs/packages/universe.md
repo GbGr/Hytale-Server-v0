@@ -10,14 +10,43 @@ The universe system manages worlds, chunks, blocks, and world generation. A serv
 
 ### Universe
 
-Singleton managing all worlds and player data:
+Singleton managing all worlds and player data. Universe itself extends JavaPlugin.
 
 ```java
 Universe universe = Universe.get();
 
 // Get worlds
-World world = universe.getWorld("default");
-Collection<World> worlds = universe.getWorlds();
+World world = universe.getWorld("worldName");
+World world = universe.getWorld(uuid);           // by UUID
+World defaultWorld = universe.getDefaultWorld(); // from config
+Map<String, World> worlds = universe.getWorlds();
+
+// Create new world (async, returns CompletableFuture)
+universe.addWorld("myworld")                                    // default generator
+    .thenAccept(world -> { /* world ready */ });
+
+universe.addWorld("voidworld", "Void", null)                    // void generator
+    .thenAccept(world -> { /* empty world ready */ });
+
+universe.addWorld("flatworld", "Flat", null)                    // flat generator
+    .thenAccept(world -> { /* flat world ready */ });
+
+// Load existing world from disk
+universe.loadWorld("savedworld").thenAccept(world -> { });
+
+// Remove world
+universe.removeWorld("worldName");
+
+// Wait for universe initialization
+universe.getUniverseReady().thenRun(() -> {
+    // All worlds loaded, safe to access
+});
+
+// Player management
+PlayerRef player = universe.getPlayer(uuid);
+PlayerRef player = universe.getPlayerByUsername("name", NameMatching.EXACT);
+List<PlayerRef> players = universe.getPlayers();
+int count = universe.getPlayerCount();
 
 // Player storage
 universe.getPlayerStorage().save(uuid, holder);
@@ -194,20 +223,53 @@ Interface for world generators:
 
 ```java
 public interface IWorldGenProvider {
-    IWorldGen createWorldGen(World world);
+    IWorldGen getGenerator() throws WorldGenLoadException;
 }
 ```
 
 ### Built-in Generators
 
-- `VoidWorldGenProvider` - Empty world
-- `FlatWorldGenProvider` - Flat terrain with layers
-- `DummyWorldGenProvider` - Minimal generation
+| Generator ID | Class | Description |
+|-------------|-------|-------------|
+| `"Void"` | `VoidWorldGenProvider` | Empty world, no blocks generated |
+| `"Flat"` | `FlatWorldGenProvider` | Flat terrain with configurable layers |
+| `"Dummy"` | `DummyWorldGenProvider` | Minimal generation |
+
+### Creating Worlds with Generators
 
 ```java
-// In world config asset
+// Via Universe.addWorld(name, generatorType, chunkStorageType)
+Universe.get().addWorld("empty", "Void", null);   // Void world
+Universe.get().addWorld("flat", "Flat", null);    // Flat world
+
+// Via WorldConfig
+WorldConfig config = world.getWorldConfig();
+config.setWorldGenProvider(new VoidWorldGenProvider());
+config.setWorldGenProvider(new FlatWorldGenProvider());
+```
+
+### VoidWorldGenProvider Options
+
+```java
+// Programmatic
+new VoidWorldGenProvider(tintColor, "EnvironmentName");
+
+// JSON config
 {
-  "WorldGen": "hytale:flat",
+  "WorldGen": "Void",
+  "WorldGenSettings": {
+    "Tint": "#RRGGBB",           // Optional: chunk tint color
+    "Environment": "Default"      // Optional: environment preset
+  }
+}
+```
+
+### FlatWorldGenProvider Options
+
+```java
+// JSON config
+{
+  "WorldGen": "Flat",
   "WorldGenSettings": {
     "Layers": [
       {"Block": "hytale:bedrock", "Height": 1},
@@ -220,17 +282,31 @@ public interface IWorldGenProvider {
 
 ## Player in World
 
-### Adding Player to World
+### Redirecting Player on Connect
 
 ```java
-// Listen for player connect
-getEventRegistry().subscribe(PlayerConnectEvent.class, event -> {
-    World targetWorld = Universe.get().getWorld("default");
-    event.setWorld(targetWorld);  // Set spawn world
+// Intercept player connection and set spawn world
+getEventRegistry().registerGlobal(PlayerConnectEvent.class, event -> {
+    World targetWorld = Universe.get().getWorld("myworld");
+    event.setWorld(targetWorld);  // Player spawns in this world
 });
 ```
 
-### Teleporting Player
+### Adding Player to World (programmatic)
+
+```java
+// Add player to world with optional spawn position
+world.addPlayer(playerRef, null)                    // default spawn
+    .thenAccept(ref -> { /* player added */ });
+
+world.addPlayer(playerRef, transform)               // specific position
+    .thenAccept(ref -> { /* player added */ });
+
+// Reset player (move between worlds with fresh state)
+Universe.get().resetPlayer(playerRef, holder, targetWorld, transform);
+```
+
+### Teleporting Player Within World
 
 ```java
 // Within world thread
@@ -253,20 +329,39 @@ world.getEntityStore().getStore().forEach(Player.getComponentType(), (ref, playe
 
 ## Events
 
+### World Lifecycle Events
+
 ```java
-// World events
-getEventRegistry().subscribe(StartWorldEvent.class, event -> {
+// World being added to universe (can be cancelled)
+getEventRegistry().registerGlobal(AddWorldEvent.class, event -> {
     World world = event.getWorld();
+    // event.setCancelled(true) to prevent
 });
 
-// Player in world events
-getEventRegistry().subscribe(AddPlayerToWorldEvent.class, event -> {
+// World being removed from universe
+getEventRegistry().registerGlobal(RemoveWorldEvent.class, event -> {
+    World world = event.getWorld();
+    RemoveWorldEvent.RemovalReason reason = event.getReason();  // GENERAL or EXCEPTIONAL
+});
+
+// All worlds finished loading on startup
+getEventRegistry().registerGlobal(AllWorldsLoadedEvent.class, event -> {
+    // Safe to access all worlds
+});
+```
+
+### Player World Events
+
+```java
+// Player added to world
+getEventRegistry().registerGlobal(AddPlayerToWorldEvent.class, event -> {
     Ref<EntityStore> ref = event.getRef();
     World world = event.getWorld();
 });
 
-getEventRegistry().subscribe(DrainPlayerFromWorldEvent.class, event -> {
-    // Player leaving world
+// Player leaving world
+getEventRegistry().registerGlobal(DrainPlayerFromWorldEvent.class, event -> {
+    // Cleanup
 });
 ```
 

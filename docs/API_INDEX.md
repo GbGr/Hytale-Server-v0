@@ -38,12 +38,14 @@ public class MyPlugin extends JavaPlugin {
 }
 ```
 
-### Important Managers (via HytaleServer)
-- `HytaleServer.instance()` - Server singleton
-- `server.getPluginManager()` - Plugin management
-- `server.getCommandManager()` - Command registration
+### Important Singletons
+- `HytaleServer.get()` - Server singleton
+- `Universe.get()` - Universe singleton (worlds, players)
+- `PluginManager.get()` - Plugin management
+
+### Via HytaleServer
 - `server.getEventBus()` - Event subscription
-- `server.getUniverse()` - World access
+- `server.getConfig()` - Server configuration
 
 ## Documentation Files
 
@@ -51,18 +53,22 @@ public class MyPlugin extends JavaPlugin {
 - [Entity System](packages/entity.md) - Player, Entity, components
 - [Event System](packages/event.md) - Events, EventBus, priorities
 - [Command System](packages/command.md) - Commands, arguments, suggestions
-- [World System](packages/universe.md) - Worlds, chunks, blocks
+- [World System](packages/universe.md) - Worlds, chunks, blocks, world generation
 - [ECS System](packages/component.md) - Components, Systems, Stores
-- [UI System](packages/ui.md) - Custom pages, windows, event handling
+- [UI System](packages/ui.md) - Custom pages, .ui files, event handling
 - [Built-in Plugins](packages/builtin.md) - Example plugins to learn from
 
 ## Quick Reference
 
-### Event Subscription
+### Event Subscription (in plugin setup())
 ```java
-server.getEventBus().subscribe(PlayerConnectEvent.class, event -> {
-    // Handle player connect
+// Global events (player connect, chat, etc.)
+getEventRegistry().registerGlobal(PlayerConnectEvent.class, event -> {
+    event.setWorld(Universe.get().getWorld("spawn"));
 });
+
+// Via server event bus
+HytaleServer.get().getEventBus().dispatchFor(MyEvent.class).dispatch(new MyEvent());
 ```
 
 ### Command Registration
@@ -77,6 +83,24 @@ entity.get(ComponentType.class);  // Get component
 entity.has(ComponentType.class);  // Check if has component
 ```
 
+### Custom UI (Pages)
+```java
+// Asset pack structure: src/main/resources/Common/UI/Custom/Pages/PluginName_Page.ui
+// manifest.json must have: "IncludesAssetPack": true (with 's'!)
+
+// Open page
+player.getPageManager().openCustomPage(ref, store, new MyPage(playerRef));
+
+// Close page
+player.getPageManager().setPage(ref, store, Page.None);
+
+// UI file (.ui) uses Common.ui components:
+// $C = "../Common.ui";
+// $C.@PageOverlay {}
+// $C.@DecoratedContainer { ... }
+// $C.@BackButton #CloseButton {}
+```
+
 ## Real Plugin Examples
 
 ### Lucky-Mining ([GitHub](https://github.com/Buuz135/Lucky-Mining))
@@ -85,6 +109,20 @@ Mining plugin that demonstrates:
 - EntityEventSystem for BreakBlockEvent
 - World block manipulation
 - Per-player state tracking
+
+### Advanced-Item-Info ([GitHub](https://github.com/Buuz135/Advanced-Item-Info))
+Item browser plugin that demonstrates:
+- Custom UI with InteractiveCustomUIPage
+- Search functionality with rebuild()
+- Event data codecs
+- Grid-based UI layout
+
+### AdminUI ([GitHub](https://github.com/Buuz135/AdminUI))
+Admin panel plugin that demonstrates:
+- Complex multi-page UI
+- Tab navigation
+- Form inputs
+- Server management commands
 
 See [Plugin System - Real-World Example](packages/plugin.md#real-world-example-lucky-mining-plugin)
 
