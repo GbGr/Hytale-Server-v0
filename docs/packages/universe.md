@@ -231,22 +231,47 @@ public interface IWorldGenProvider {
 
 | Generator ID | Class | Description |
 |-------------|-------|-------------|
-| `"Void"` | `VoidWorldGenProvider` | Empty world, no blocks generated |
+| `"Hytale"` | `HytaleWorldGenProvider` | Standard full world generator with terrain, biomes, structures |
+| `"Void"` | `VoidWorldGenProvider` | Empty world, no blocks generated (default fallback) |
 | `"Flat"` | `FlatWorldGenProvider` | Flat terrain with configurable layers |
-| `"Dummy"` | `DummyWorldGenProvider` | Minimal generation |
+| `"Dummy"` | `DummyWorldGenProvider` | Minimal generation for testing |
+| `"default"` | - | Uses the default generator (currently `Void`) |
+
+**Where to find generator types:**
+- Core generators: `com.hypixel.hytale.server.core.universe.world.worldgen.provider.*`
+- Hytale generator: `com.hypixel.hytale.server.worldgen.HytaleWorldGenProvider`
+- Registration in: `Universe.setup()` and `WorldGenPlugin.setup()`
+- Decompiled sources: `docs/decompiled/`
 
 ### Creating Worlds with Generators
 
 ```java
 // Via Universe.addWorld(name, generatorType, chunkStorageType)
-Universe.get().addWorld("empty", "Void", null);   // Void world
-Universe.get().addWorld("flat", "Flat", null);    // Flat world
+Universe.get().addWorld("survival", "Hytale", null); // Full terrain world
+Universe.get().addWorld("empty", "Void", null);      // Void world (no blocks)
+Universe.get().addWorld("flat", "Flat", null);       // Flat world
 
 // Via WorldConfig
 WorldConfig config = world.getWorldConfig();
-config.setWorldGenProvider(new VoidWorldGenProvider());
-config.setWorldGenProvider(new FlatWorldGenProvider());
+config.setWorldGenProvider(new HytaleWorldGenProvider()); // Full terrain
+config.setWorldGenProvider(new VoidWorldGenProvider());   // Empty
+config.setWorldGenProvider(new FlatWorldGenProvider());   // Flat layers
 ```
+
+### HytaleWorldGenProvider Options
+
+```java
+// JSON config (world config.json)
+{
+  "WorldGen": "Hytale",
+  "WorldGenSettings": {
+    "Name": "Default",           // Generator name ("Default" if not provided)
+    "Path": "/path/to/worldgen"  // Optional custom path to world gen config
+  }
+}
+```
+
+The Hytale generator loads terrain configuration from `Assets/Server/World/` by default.
 
 ### VoidWorldGenProvider Options
 
