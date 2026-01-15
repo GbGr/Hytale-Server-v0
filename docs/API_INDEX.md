@@ -11,7 +11,7 @@ This documentation is auto-generated from decompiled HytaleServer.jar for AI age
 | `com.hypixel.hytale.server.core.event` | Server events - player, entity, blocks |
 | `com.hypixel.hytale.server.core.command` | Command system - registration, arguments |
 | `com.hypixel.hytale.server.core.universe` | Worlds, chunks, world generation |
-| `com.hypixel.hytale.server.core.blocktype` | Block types and states |
+| `com.hypixel.hytale.server.core.asset.type.blocktype` | Block types, drops, materials |
 | `com.hypixel.hytale.server.core.inventory` | Inventory and item management |
 | `com.hypixel.hytale.server.core.permissions` | Permission system |
 | `com.hypixel.hytale.component` | ECS (Entity Component System) |
@@ -49,11 +49,13 @@ public class MyPlugin extends JavaPlugin {
 
 ## Documentation Files
 
+- **[Block List Reference](BLOCK_LIST.md)** - Complete list of all block types and their drops
 - [Plugin System](packages/plugin.md) - JavaPlugin, lifecycle, registries
 - [Entity System](packages/entity.md) - Player, Entity, components
 - [Event System](packages/event.md) - Events, EventBus, priorities
 - [Command System](packages/command.md) - Commands, arguments, suggestions
 - [World System](packages/universe.md) - Worlds, chunks, blocks, world generation
+- [Block System](packages/blocks.md) - BlockType, drops, gathering, materials
 - [ECS System](packages/component.md) - Components, Systems, Stores
 - [UI System](packages/ui.md) - Custom pages, .ui files, event handling
 - [Built-in Plugins](packages/builtin.md) - Example plugins to learn from

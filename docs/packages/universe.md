@@ -22,14 +22,22 @@ World defaultWorld = universe.getDefaultWorld(); // from config
 Map<String, World> worlds = universe.getWorlds();
 
 // Create new world (async, returns CompletableFuture)
-universe.addWorld("myworld")                                    // default generator
+// Preferred: use makeWorld with explicit WorldConfig
+Path savePath = universe.getPath().resolve("worlds").resolve("myworld");
+WorldConfig config = universe.getWorldConfigProvider().load(savePath, "myworld").join();
+config.setWorldGenProvider(new VoidWorldGenProvider());  // or other generator
+universe.makeWorld("myworld", savePath, config)
     .thenAccept(world -> { /* world ready */ });
 
+// Check if world exists before creating
+World existing = universe.getWorld("myworld");
+if (existing == null) {
+    // Create new world...
+}
+
+// @Deprecated - use makeWorld instead
 universe.addWorld("voidworld", "Void", null)                    // void generator
     .thenAccept(world -> { /* empty world ready */ });
-
-universe.addWorld("flatworld", "Flat", null)                    // flat generator
-    .thenAccept(world -> { /* flat world ready */ });
 
 // Load existing world from disk
 universe.loadWorld("savedworld").thenAccept(world -> { });
@@ -246,16 +254,29 @@ public interface IWorldGenProvider {
 ### Creating Worlds with Generators
 
 ```java
-// Via Universe.addWorld(name, generatorType, chunkStorageType)
+// Preferred: Via Universe.makeWorld (recommended approach)
+Universe universe = Universe.get();
+String worldName = "myworld";
+
+// Always check if world already exists
+World existing = universe.getWorld(worldName);
+if (existing != null) {
+    // Use existing world
+    return existing;
+}
+
+// Create new world with makeWorld
+Path savePath = universe.getPath().resolve("worlds").resolve(worldName);
+WorldConfig config = universe.getWorldConfigProvider().load(savePath, worldName).join();
+config.setWorldGenProvider(new VoidWorldGenProvider());   // Empty world
+// or: config.setWorldGenProvider(new FlatWorldGenProvider());   // Flat world
+// or: config.setWorldGenProvider(new HytaleWorldGenProvider()); // Full terrain
+World world = universe.makeWorld(worldName, savePath, config).join();
+
+// @Deprecated: Via Universe.addWorld (still works but deprecated)
 Universe.get().addWorld("survival", "Hytale", null); // Full terrain world
 Universe.get().addWorld("empty", "Void", null);      // Void world (no blocks)
 Universe.get().addWorld("flat", "Flat", null);       // Flat world
-
-// Via WorldConfig
-WorldConfig config = world.getWorldConfig();
-config.setWorldGenProvider(new HytaleWorldGenProvider()); // Full terrain
-config.setWorldGenProvider(new VoidWorldGenProvider());   // Empty
-config.setWorldGenProvider(new FlatWorldGenProvider());   // Flat layers
 ```
 
 ### HytaleWorldGenProvider Options
@@ -314,6 +335,27 @@ new VoidWorldGenProvider(tintColor, "EnvironmentName");
 getEventRegistry().registerGlobal(PlayerConnectEvent.class, event -> {
     World targetWorld = Universe.get().getWorld("myworld");
     event.setWorld(targetWorld);  // Player spawns in this world
+});
+
+// Create per-player worlds (check existence first)
+getEventRegistry().registerGlobal(PlayerConnectEvent.class, event -> {
+    PlayerRef playerRef = event.getPlayerRef();
+    String worldName = "player_" + playerRef.getUuid();
+    Universe universe = Universe.get();
+
+    // Check if world already exists
+    World existingWorld = universe.getWorld(worldName);
+    if (existingWorld != null) {
+        event.setWorld(existingWorld);
+        return;
+    }
+
+    // Create new world using makeWorld
+    Path savePath = universe.getPath().resolve("worlds").resolve(worldName);
+    WorldConfig config = universe.getWorldConfigProvider().load(savePath, worldName).join();
+    config.setWorldGenProvider(new VoidWorldGenProvider());
+    World newWorld = universe.makeWorld(worldName, savePath, config).join();
+    event.setWorld(newWorld);
 });
 ```
 
